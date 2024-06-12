@@ -21,8 +21,8 @@
 #include <cstdint>
 #include <string>
 
-class Config;
-class CDataStream;
+class Config; // NOLINT(cppcoreguidelines-virtual-class-destructor)
+class msg_buffer;
 class CSerializedNetMsg;
 
 /**
@@ -136,7 +136,7 @@ public:
     CMessageHeader(const MessageMagic& pchMessageStartIn);
     CMessageHeader(const Config& config, const CSerializedNetMsg& msg);
 
-    uint64_t Read(const char* pch, uint64_t numBytes, CDataStream& buff);
+    uint64_t Read(const char* pch, uint64_t numBytes, msg_buffer&);
 
     std::string GetCommand() const;
     const MessageMagic& GetMsgStart() const { return pchMessageStart; }
@@ -190,6 +190,8 @@ private:
     bool complete {false};
 };
 
+bool operator==(const CMessageHeader&, const CMessageHeader&);
+
 /**
  * Bitcoin protocol message types. When adding new message types, don't forget
  * to update allNetMessageTypes in protocol.cpp.
@@ -201,6 +203,7 @@ namespace NetMsgType {
  * receiving node at the beginning of a connection.
  * @see https://bitcoin.org/en/developer-reference#version
  */
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern const char *VERSION;
 /**
  * The verack message acknowledges a previously-received version message,
@@ -427,6 +430,7 @@ extern const char *AUTHRESP;
  * Contains a dataref transaction.
  */
 extern const char *DATAREFTX;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 /**
  * Indicate if the message is used to transmit the content of a block.
@@ -607,6 +611,7 @@ public:
 public:
     CProtoconf() = default;
     CProtoconf(unsigned int maxRecvPayloadLengthIn, const std::string& streamPoliciesIn)
+    // NOLINTNEXTLINE(cppcoreguidelines-use-default-member-init)
     : numberOfFields{2}, maxRecvPayloadLength{maxRecvPayloadLengthIn}, streamPolicies{streamPoliciesIn}
     {}
 

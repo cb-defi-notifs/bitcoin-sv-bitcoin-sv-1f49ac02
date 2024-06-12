@@ -10,7 +10,6 @@
 #include "crypto/common.h"
 #include "prevector.h"
 #include "serialize.h"
-#include "span.h"
 #include "opcodes.h"
 
 #include <array>
@@ -19,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -104,13 +104,19 @@ public:
             insert(end(), uint8_t(b.size()));
         } else if (b.size() <= 0xffff) {
             insert(end(), OP_PUSHDATA2);
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
             uint8_t data[2];
+            // NOLINTNEXTLINE-cppcoreguidelines-pro-bounds-array-to-pointer-decay,
             WriteLE16(data, b.size());
+            // NOLINTNEXTLINE-cppcoreguidelines-pro-bounds-array-to-pointer-decay,
             insert(end(), data, data + sizeof(data));
         } else {
             insert(end(), OP_PUSHDATA4);
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
             uint8_t data[4];
+            // NOLINTNEXTLINE-cppcoreguidelines-pro-bounds-array-to-pointer-decay,
             WriteLE32(data, b.size());
+            // NOLINTNEXTLINE-cppcoreguidelines-pro-bounds-array-to-pointer-decay,
             insert(end(), data, data + sizeof(data));
         }
         insert(end(), b.begin(), b.end());
@@ -201,12 +207,12 @@ public:
         if (b.empty()) return nFound;
         CScript result;
         iterator pc = begin(), pc2 = begin();
-        opcodetype opcode;
-        do {
+        opcodetype opcode; // NOLINT(cppcoreguidelines-init-variables)
+        do { // NOLINT(cppcoreguidelines-avoid-do-while)
             result.insert(result.end(), pc2, pc);
             while (static_cast<size_t>(end() - pc) >= b.size() &&
                    std::equal(b.begin(), b.end(), pc)) {
-                pc = pc + b.size();
+                pc = pc + b.size(); // NOLINT(*-narrowing-conversions)
                 ++nFound;
             }
             pc2 = pc;
@@ -294,16 +300,17 @@ public:
         CScriptBase().swap(*this);
     }
 };
+static_assert(std::ranges::range<CScript>);
 
 std::ostream &operator<<(std::ostream &, const CScript &);
 std::string to_string(const CScript&);
 
-bool IsP2SH(bsv::span<const uint8_t>);
-bool IsDSNotification(bsv::span<const uint8_t>);
-bool IsDustReturnScript(bsv::span<const uint8_t> script);
-bool IsMinerId(bsv::span<const uint8_t> script);
+bool IsP2SH(std::span<const uint8_t>);
+bool IsDSNotification(std::span<const uint8_t>);
+bool IsDustReturnScript(std::span<const uint8_t> script);
+bool IsMinerId(std::span<const uint8_t> script);
 
-constexpr bool IsMinerInfo(const bsv::span<const uint8_t> script)
+constexpr bool IsMinerInfo(const std::span<const uint8_t> script)
 {
     constexpr std::array<uint8_t, 4> protocol_id{0x60, 0x1d, 0xfa, 0xce};
     return script.size() >= 7 && 
@@ -316,8 +323,9 @@ constexpr bool IsMinerInfo(const bsv::span<const uint8_t> script)
            script[6] == protocol_id[3];
 }
 
-size_t CountOp(bsv::span<const uint8_t>, opcodetype);
+size_t CountOp(std::span<const uint8_t>, opcodetype);
 
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class CReserveScript {
 public:
     CScript reserveScript;

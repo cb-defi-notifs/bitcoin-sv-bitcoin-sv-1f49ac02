@@ -20,12 +20,17 @@ struct ActiveZMQNotifier
     std::string notifierAddress;
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class CZMQNotificationInterface final : public CValidationInterface {
 public:
     virtual ~CZMQNotificationInterface();
 
     static CZMQNotificationInterface *Create();
     std::vector<ActiveZMQNotifier> ActiveZMQNotifiers();
+
+    // Register/unregister validation interface
+    void RegisterValidationInterface() override;
+    void UnregisterValidationInterface() override;
 
 protected:
     bool Initialize();
@@ -59,6 +64,7 @@ private:
     void *pcontext;
     std::list<CZMQAbstractNotifier *> notifiers;
     std::shared_ptr<CZMQPublisher> zmqPublisher;
+    std::vector<boost::signals2::scoped_connection> slotConnections {};
 };
 
 #endif // BITCOIN_ZMQ_ZMQNOTIFICATIONINTERFACE_H

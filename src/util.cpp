@@ -524,7 +524,7 @@ void ClearDatadirCache() {
 
 fs::path GetConfigFile(const std::string &confPath) {
     fs::path pathConfigFile(confPath);
-    if (!pathConfigFile.is_complete())
+    if (!pathConfigFile.is_absolute())
         pathConfigFile = GetDataDir(false) / pathConfigFile;
 
     return pathConfigFile;
@@ -563,7 +563,7 @@ void ArgsManager::ReadConfigFile(const std::string &confPath) {
 #ifndef WIN32
 fs::path GetPidFile() {
     fs::path pathPidFile(gArgs.GetArg("-pid", BITCOIN_PID_FILENAME));
-    if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
+    if (!pathPidFile.is_absolute()) pathPidFile = GetDataDir() / pathPidFile;
     return pathPidFile;
 }
 
@@ -724,6 +724,23 @@ void runCommand(const std::string &strCommand) {
                   nErr);
 }
 
+#ifdef __MINGW32__
+// MinGW with POSIX threads has a bug where destructors for thread_local
+// objects are called after the memory has been already released.
+// As a workaround, Boost thread specific storage is used instead.
+#include <boost/thread/tss.hpp>
+static std::string& ThreadName()
+{
+    static boost::thread_specific_ptr<std::string> threadName_tsp;
+    auto* threadName = threadName_tsp.get();
+    if(threadName==nullptr)
+    {
+        threadName_tsp.reset(new std::string);
+        threadName = threadName_tsp.get();
+    }
+    return *threadName;
+}
+#else
 static std::string& ThreadName()
 {
     // Declare the thread-local variable inside this function so that it's
@@ -732,6 +749,7 @@ static std::string& ThreadName()
     static thread_local std::string threadName {};
     return threadName;
 }
+#endif
 
 void RenameThread(const char *name)
 {

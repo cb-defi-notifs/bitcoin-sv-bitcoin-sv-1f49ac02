@@ -19,17 +19,66 @@
 #include "script/sign.h"
 
 #include <limits>
+#include <tuple>
 #include <vector>
 
 #include <boost/test/unit_test.hpp>
 
-// Helpers:
-static std::vector<uint8_t> Serialize(const CScript &s) {
-    std::vector<uint8_t> sSerialized(s.begin(), s.end());
-    return sSerialized;
+namespace
+{
+    // Helpers:
+    std::vector<uint8_t> Serialize(const CScript &s)
+    {
+        std::vector<uint8_t> sSerialized(s.begin(), s.end());
+        return sSerialized;
+    }
 }
 
 BOOST_FIXTURE_TEST_SUITE(sigopcount_tests, BasicTestingSetup)
+
+BOOST_AUTO_TEST_CASE(GetSigOpCount_WithReturn)
+{
+    // Tests for GitHub #296 & SVN-2388
+    CScriptNum BigNum { std::vector<uint8_t>{1,2,3,4,5}, false, 6, true };
+    using TestParams = std::tuple<CScript, bool, uint64_t>; // <Script, triggers error, sig op count>
+    std::vector<TestParams> tests {
+        {
+            // Check we can reproduce the sigops error in a non OP_RETURN script
+            CScript{} << BigNum << OP_CHECKMULTISIG,
+                true, 0
+        },
+        {
+            // OP_RETURN allows us to skip unexecutable opcodes that follow it at the top level scope
+            CScript{} << OP_RETURN << BigNum << OP_CHECKMULTISIG,
+                false, 0
+        },
+        {
+            // Script with nested OP_IFs skips unexecutable opcodes that follow OP_RETURN at top level scope
+            CScript{} << OP_TRUE << OP_IF << OP_TRUE << OP_IF << OP_RETURN << OP_ELSE << OP_3 << OP_CHECKMULTISIG << OP_ENDIF << OP_ENDIF
+                      << OP_RETURN << BigNum << OP_CHECKMULTISIG,
+                false, 3
+        },
+        {
+            // Script with nested OP_IFs detects error if not short-circuited by OP_RETURN at top level scope
+            CScript{} << OP_TRUE << OP_IF << OP_TRUE << OP_IF << OP_RETURN << OP_ELSE << OP_3 << OP_CHECKMULTISIG << OP_ENDIF << OP_ENDIF
+                      << BigNum << OP_CHECKMULTISIG,
+                true, 0
+        },
+        {
+            // Invalid script with unbalanced IF/ENDIF
+            CScript{} << OP_TRUE << OP_IF << OP_ENDIF << OP_ENDIF,
+                true, 0
+        }
+    };
+
+    for(const auto& [script, errorExpected, sigOpsExpected] : tests)
+    {
+        bool sigOpCountError {false};
+        uint64_t sigOps { script.GetSigOpCount(true, true, sigOpCountError) };
+        BOOST_CHECK_EQUAL(sigOpCountError, errorExpected);
+        BOOST_CHECK_EQUAL(sigOps, sigOpsExpected);
+    }
+}
 
 BOOST_AUTO_TEST_CASE(GetSigOpCount) {
     // Test CScript::GetSigOpCount()
@@ -440,19 +489,19 @@ BOOST_AUTO_TEST_CASE(test_max_sigops_per_tx)
     BOOST_CHECK(testConfig.SetMaxTxSigOpsCountPolicy(20500, &error));
     BOOST_CHECK_EQUAL(error,"");
     maxTxSigOpsCountPolicy = testConfig.GetMaxTxSigOpsCountPolicy(true);
-    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500);
+    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500U);
     
     /* Case 6: Policy is applied with too big value - previous value must not be changed */
     BOOST_CHECK(!testConfig.SetMaxTxSigOpsCountPolicy(static_cast<int64_t>(MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) + 1, &error));
     BOOST_CHECK(error.find("Policy value for maximum allowed number of signature operations per transaction must not exceed limit of") != std::string::npos);
     maxTxSigOpsCountPolicy = testConfig.GetMaxTxSigOpsCountPolicy(true);
-    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500);
+    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500U);
 
     /* Case 7: Policy is applied with negative value - previous value must not be changed */
     BOOST_CHECK(!testConfig.SetMaxTxSigOpsCountPolicy(-123, &error));
     BOOST_CHECK_EQUAL(error, "Policy value for maximum allowed number of signature operations per transaction cannot be less than 0");
     maxTxSigOpsCountPolicy = testConfig.GetMaxTxSigOpsCountPolicy(true);
-    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500);
+    BOOST_CHECK_EQUAL(maxTxSigOpsCountPolicy, 20500U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

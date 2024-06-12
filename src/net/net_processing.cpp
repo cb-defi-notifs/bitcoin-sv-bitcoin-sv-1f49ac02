@@ -563,10 +563,14 @@ private:
 
 } // namespace
 
-// Forward declarion of ProcessMessage
-static bool ProcessMessage(const Config& config, const CNodePtr& pfrom, const std::string& strCommand,
-    CDataStream& vRecv, int64_t nTimeReceived, const CChainParams& chainparams, CConnman& connman,
-    const std::atomic<bool>& interruptMsgProc);
+static bool ProcessMessage(const Config& config,
+                           const CNodePtr& pfrom,
+                           const std::string& strCommand,
+                           msg_buffer& vRecv,
+                           int64_t nTimeReceived,
+                           const CChainParams& chainparams,
+                           CConnman& connman,
+                           const std::atomic<bool>& interruptMsgProc);
 
 bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats) {
     // Try to obtain an access to the node's state data.
@@ -648,6 +652,22 @@ static void Misbehaving(const CNodePtr& node, int howmuch, const std::string &re
 PeerLogicValidation::PeerLogicValidation(CConnman *connmanIn)
     : connman(connmanIn)
 {}
+
+void PeerLogicValidation::RegisterValidationInterface()
+{
+    CMainSignals& sigs { GetMainSignals() };
+
+    using namespace boost::placeholders;
+    slotConnections.push_back(sigs.BlockConnected.connect(boost::bind(&PeerLogicValidation::BlockConnected, this, _1, _2, _3)));
+    slotConnections.push_back(sigs.UpdatedBlockTip.connect(boost::bind(&PeerLogicValidation::UpdatedBlockTip, this, _1, _2, _3)));
+    slotConnections.push_back(sigs.BlockChecked.connect(boost::bind(&PeerLogicValidation::BlockChecked, this, _1, _2)));
+    slotConnections.push_back(sigs.NewPoWValidBlock.connect(boost::bind(&PeerLogicValidation::NewPoWValidBlock, this, _1, _2)));
+}
+
+void PeerLogicValidation::UnregisterValidationInterface()
+{
+    slotConnections.clear();
+}
 
 void PeerLogicValidation::BlockConnected(
     const std::shared_ptr<const CBlock> &pblock, const CBlockIndex *pindex,
@@ -1433,7 +1453,7 @@ static void ProcessGetData(const Config &config, const CNodePtr& pfrom,
 /**
 * Process reject messages.
 */
-static void ProcessRejectMessage(CDataStream& vRecv, const CNodePtr& pfrom)
+static void ProcessRejectMessage(msg_buffer& vRecv, const CNodePtr& pfrom)
 {
     if(LogAcceptCategory(BCLog::NETMSG))
     {
@@ -1474,8 +1494,10 @@ static void ProcessRejectMessage(CDataStream& vRecv, const CNodePtr& pfrom)
 /**
 * Process createstream messages.
 */
-static bool ProcessCreateStreamMessage(const CNodePtr& pfrom, const std::string& strCommand,
-    CDataStream& vRecv, CConnman& connman)
+static bool ProcessCreateStreamMessage(const CNodePtr& pfrom,
+                                       const std::string& strCommand,
+                                       msg_buffer& vRecv,
+                                       CConnman& connman)
 {
     // Check we haven't already received either a createstream or a version message
     if(pfrom->nVersion != 0)
@@ -1549,8 +1571,10 @@ static bool ProcessCreateStreamMessage(const CNodePtr& pfrom, const std::string&
 /**
 * Process streamack messages.
 */
-static bool ProcessStreamAckMessage(const CNodePtr& pfrom, const std::string& strCommand,
-    CDataStream& vRecv, CConnman& connman)
+static bool ProcessStreamAckMessage(const CNodePtr& pfrom,
+                                    const std::string& strCommand,
+                                    msg_buffer& vRecv,
+                                    CConnman& connman)
 {
     // Can't receive streamacks over an established connection
     if(pfrom->nVersion != 0)
@@ -1614,8 +1638,11 @@ static bool ProcessStreamAckMessage(const CNodePtr& pfrom, const std::string& st
 /**
 * Process version messages.
 */
-static bool ProcessVersionMessage(const CNodePtr& pfrom, const std::string& strCommand,
-    CDataStream& vRecv, CConnman& connman, const Config& config)
+static bool ProcessVersionMessage(const CNodePtr& pfrom,
+                                  const std::string& strCommand,
+                                  msg_buffer& vRecv,
+                                  CConnman& connman,
+                                  const Config& config)
 {
     // Each connection can only send one version message
     if(pfrom->nVersion != 0) {
@@ -1928,8 +1955,12 @@ static void ProcessVerAckMessage(const CNodePtr& pfrom, const CNetMsgMaker& msgM
 /**
 * Process authch message.
 */
-static bool ProcessAuthChMessage(const Config& config, const CNodePtr& pfrom, const CNetMsgMaker& msgMaker,
-    const std::string& strCommand, CDataStream& vRecv, CConnman& connman)
+static bool ProcessAuthChMessage(const Config& config,
+                                 const CNodePtr& pfrom,
+                                 const CNetMsgMaker& msgMaker,
+                                 const std::string& strCommand,
+                                 msg_buffer& vRecv,
+                                 CConnman& connman)
 {
     // Skip the message if the AuthConn has already been established.
     if (pfrom->fAuthConnEstablished) {
@@ -2068,8 +2099,10 @@ static bool ProcessAuthChMessage(const Config& config, const CNodePtr& pfrom, co
 /**
 * Process authresp messages.
 */
-static bool ProcessAuthRespMessage(const CNodePtr& pfrom, const std::string& strCommand,
-    CDataStream& vRecv, CConnman& connman)
+static bool ProcessAuthRespMessage(const CNodePtr& pfrom,
+                                   const std::string& strCommand,
+                                   msg_buffer& vRecv,
+                                   CConnman& connman)
 {
     // Skip the message if the AuthConn has already been established.
     if (pfrom->fAuthConnEstablished) {
@@ -2186,8 +2219,10 @@ static bool ProcessAuthRespMessage(const CNodePtr& pfrom, const std::string& str
 /**
 * Process peer address message.
 */
-static bool ProcessAddrMessage(const CNodePtr& pfrom, const std::atomic<bool>& interruptMsgProc,
-    CDataStream& vRecv, CConnman& connman)
+static bool ProcessAddrMessage(const CNodePtr& pfrom,
+                               const std::atomic<bool>& interruptMsgProc,
+                               msg_buffer& vRecv,
+                               CConnman& connman)
 {
     std::vector<CAddress> vAddr;
     vRecv >> vAddr;
@@ -2332,7 +2367,7 @@ static void ProcessSendHdrsEnMessage(const CNodePtr& pfrom)
 /**
 * Process send compact message.
 */
-static void ProcessSendCompactMessage(const CNodePtr& pfrom, CDataStream& vRecv)
+static void ProcessSendCompactMessage(const CNodePtr& pfrom, msg_buffer& vRecv)
 {
     bool fAnnounceUsingCMPCTBLOCK = false;
     uint64_t nCMPCTBLOCKVersion = 0;
@@ -2361,7 +2396,7 @@ static void ProcessSendCompactMessage(const CNodePtr& pfrom, CDataStream& vRecv)
 static void ProcessInvMessage(const CNodePtr& pfrom,
                               const CNetMsgMaker& msgMaker,
                               const std::atomic<bool>& interruptMsgProc,
-                              CDataStream& vRecv,
+                              msg_buffer& vRecv,
                               CConnman& connman,
                               const Config &config)
 {
@@ -2433,7 +2468,7 @@ static void ProcessGetDataMessage(const Config& config,
                                   const CNodePtr& pfrom,
                                   const CChainParams& chainparams,
                                   const std::atomic<bool>& interruptMsgProc,
-                                  CDataStream& vRecv,
+                                  msg_buffer& vRecv,
                                   CConnman& connman)
 {
     std::vector<CInv> vInv;
@@ -2521,11 +2556,10 @@ static bool ProcessGetBlocks(
     return true;
 }
 
-static void ProcessGetBlocksMessage(
-    const Config& config,
-    const CNodePtr& pfrom,
-    const CChainParams& chainparams,
-    CDataStream& vRecv)
+static void ProcessGetBlocksMessage(const Config& config,
+                                    const CNodePtr& pfrom,
+                                    const CChainParams& chainparams,
+                                    msg_buffer& vRecv)
 {
     pfrom->mGetBlockMessageRequest = {vRecv};
     if(ProcessGetBlocks(config, pfrom, chainparams, *pfrom->mGetBlockMessageRequest))
@@ -2540,7 +2574,7 @@ static void ProcessGetBlocksMessage(
             " waiting as a candidate. Deferring getblocks reply.\n");
     }
 }
- 
+
 namespace
 {
 
@@ -2685,7 +2719,7 @@ static void ProcessGetBlockTxnMessage(const Config& config,
                                       const CNodePtr& pfrom,
                                       const CChainParams& chainparams,
                                       const std::atomic<bool>& interruptMsgProc,
-                                      CDataStream& vRecv,
+                                      msg_buffer& vRecv,
                                       CConnman& connman)
 {
     BlockTransactionsRequest req {};
@@ -2774,6 +2808,95 @@ std::optional<const CBlockIndex*> GetFirstBlockIndexFromLocatorNL(const CBlockLo
     return pindex;
 }
 
+/**
+ * Helper class template used to create CVectorStream objects that will track number of pending responses.
+ *
+ * It is used in ProcessGetHeadersMessage() and ProcessGetHeadersEnrichedMessage().
+ *
+ * @tparam PMemPendingResponses Pointer to data member in CNode::MonitoredPendingResponses that keeps count of pending
+ *                              responses for the specific request type (e.g. &CNode::MonitoredPendingResponses::getheaders
+ *                              for getheaders P2P requests).
+ */
+template<CNode::MonitoredPendingResponses::PendingResponses CNode::MonitoredPendingResponses::* PMemPendingResponses>
+class CreateHeaderStreamWithPendingResponsesCounting
+{
+public:
+    explicit CreateHeaderStreamWithPendingResponsesCounting(const CNodePtr& pfrom)
+    : pfrom_weak( pfrom )
+    {}
+
+    std::unique_ptr<CVectorStream> operator()(std::vector<uint8_t>&& serialisedHeader)
+    {
+        struct CVectorStream_WithPendingResponsesCounting : CVectorStream
+        {
+            /**
+             * Constructor forwards the data to constructor of CVectorStream and increments the pending responses count.
+             *
+             * This object is intended to be constructed when the response is added to the sending queue.
+             *
+             * @param data
+             * @param pfrom_weak0
+             */
+            CVectorStream_WithPendingResponsesCounting(std::vector<uint8_t>&& data, CNodePtr::weak_type&& pfrom_weak0)
+            : CVectorStream(std::move(data))
+            , pfrom_weak(std::move(pfrom_weak0))
+            {
+                // When the header stream object is created, the response is considered to be pending.
+                // Note that this will happen during the call to connman.PushMessage() that adds the message to the sending P2P queue.
+                if(auto pfrom = this->pfrom_weak.lock())
+                {
+                    (pfrom->pendingResponses.*PMemPendingResponses).Increment();
+                }
+            }
+
+            CVectorStream_WithPendingResponsesCounting(CVectorStream_WithPendingResponsesCounting&&) = delete; // no copying or moving
+
+            /**
+             * Destructor decrements the pending responses count.
+             *
+             * This object is intended to be destroyed when the response is taken out from the sending queue.
+             */
+            ~CVectorStream_WithPendingResponsesCounting()
+            {
+                // When the header stream object is destroyed, the response is considered to be sent.
+                // If connection is still alive, number of pending responses is decremented. If it is not,
+                // nothing is done since the counter does not exist anymore.
+                // Note that the sender of the request did not yet receive the response at this time and it
+                // is (probably) still in the TCP send buffer (which may contain several responses that
+                // are not yet received by the sender of the request). Actual response payload may also be
+                // stored in a different message (immediately after this one) that is still in the sending
+                // queue. In addition, this object may also be destroyed even without sending the response
+                // (e.g. if connection is closed).
+                // All this means that the value in member PMemPendingResponses may be a bit lower than
+                // the number of responses the sender still has to receive. But this doesn't matter because
+                // we're only interested in detecting too large number of responses still waiting in the
+                // sending queue.
+                if(auto pfrom = pfrom_weak.lock())
+                {
+                    (pfrom->pendingResponses.*PMemPendingResponses).Decrement();
+                }
+            }
+
+            /**
+             * Return the memory used by this object
+             */
+            size_t GetEstimatedMaxMemoryUsage() const override
+            {
+                // Used memory reported by the base class must be adjusted to account for additional
+                // data member in this class.
+                return this->CVectorStream::GetEstimatedMaxMemoryUsage() + (sizeof(*this) - sizeof(CVectorStream));
+            }
+
+            CNodePtr::weak_type pfrom_weak;
+        };
+
+        return std::make_unique<CVectorStream_WithPendingResponsesCounting>( std::move(serialisedHeader), std::move(pfrom_weak) );
+    }
+
+private:
+    CNodePtr::weak_type pfrom_weak;
+};
+
 } // anonymous namespace
 
 /**
@@ -2781,9 +2904,25 @@ std::optional<const CBlockIndex*> GetFirstBlockIndexFromLocatorNL(const CBlockLo
 */
 static void ProcessGetHeadersMessage(const CNodePtr& pfrom,
                                      const CNetMsgMaker& msgMaker,
-                                     CDataStream& vRecv,
+                                     msg_buffer& vRecv,
                                      CConnman& connman)
 {
+    if(unsigned int n; !pfrom->fWhitelisted && !pfrom->pendingResponses.getheaders.IsBelowLimit(n))
+    {
+        // If number of pending responses is too large, the request is ignored and the peer is disconnected.
+        // NOTE: Because we check if the number of pending responses is below limit before adding a new response,
+        //       it is possible that the number becomes a bit higher than specified maximum. E.g.: If two threads
+        //       running at the same time both see max-1 pending responses, they will both proceed to add a new
+        //       response, which will result in max+1 pending responses. But this is OK, since we don't need to
+        //       enforce the exact maximum. If, on the other hand, an exact maximum would need to be enforced
+        //       (e.g. no more than one pending response guarantee), this would need to be addressed properly and
+        //       would probably introduce some performance overhead.
+        LogPrint(BCLog::NETMSG, "Ignoring getheaders and disconnecting the peer because there are too many (%d, max=%d) pending responses to previously received getheaders from peer=%d.\n",
+            n, pfrom->pendingResponses.getheaders.GetMaxAllowed(), pfrom->id);
+        pfrom->fDisconnect = true;
+        return;
+    }
+
     CBlockLocator locator;
     uint256 hashStop;
     vRecv >> locator >> hashStop;
@@ -2839,7 +2978,13 @@ static void ProcessGetHeadersMessage(const CNodePtr& pfrom,
     // will re-announce the new block via headers (or compact blocks again)
     // in the SendMessages logic.
     state->pindexBestHeaderSent = pindex ? pindex : chainActive.Tip();
-    connman.PushMessage(pfrom, msgMaker.Make(NetMsgType::HEADERS, vHeaders));
+
+    auto msg = msgMaker.Make(NetMsgType::HEADERS, vHeaders);
+    if(!pfrom->fWhitelisted)
+    {
+        msg.headerStreamCreator = CreateHeaderStreamWithPendingResponsesCounting<&CNode::MonitoredPendingResponses::getheaders>(pfrom);
+    }
+    connman.PushMessage(pfrom, std::move(msg));
 }
 
 namespace {
@@ -2943,7 +3088,7 @@ public:
                 // See if this coinbase contains a miner-info reference
                 if(g_dataRefIndex && coinbaseAndProof->txn->vout.size() > 1)
                 {
-                    const bsv::span<const uint8_t> script { coinbaseAndProof->txn->vout[1].scriptPubKey };
+                    const span<const uint8_t> script { coinbaseAndProof->txn->vout[1].scriptPubKey };
                     if(IsMinerInfo(script))
                     {
                         const auto& mir { ParseMinerInfoRef(script) };
@@ -3003,10 +3148,19 @@ public:
  */
 static void ProcessGetHeadersEnrichedMessage(const CNodePtr& pfrom,
                                              const CNetMsgMaker& msgMaker,
-                                             CDataStream& vRecv,
+                                             msg_buffer& vRecv,
                                              CConnman& connman,
                                              const Config& config)
 {
+    if(unsigned int n; !pfrom->fWhitelisted && !pfrom->pendingResponses.gethdrsen.IsBelowLimit(n))
+    {
+        // Same comment applies as in ProcessGetHeadersMessage().
+        LogPrint(BCLog::NETMSG, "Ignoring gethdrsen and disconnecting the peer because there are too many (%d, max=%d) pending responses to previously received gethdrsen from peer=%d.\n",
+            n, pfrom->pendingResponses.gethdrsen.GetMaxAllowed(), pfrom->id);
+        pfrom->fDisconnect = true;
+        return;
+    }
+
     CBlockLocator locator;
     uint256 hashStop;
     vRecv >> locator >> hashStop;
@@ -3106,7 +3260,12 @@ static void ProcessGetHeadersEnrichedMessage(const CNodePtr& pfrom,
     assert(state);
     state->pindexBestHeaderSent = lastBlockIndex;
 
-    connman.PushMessage(pfrom, msgMaker.Make(NetMsgType::HDRSEN, vHeadersEnriched));
+    auto msg = msgMaker.Make(NetMsgType::HDRSEN, vHeadersEnriched);
+    if(!pfrom->fWhitelisted)
+    {
+        msg.headerStreamCreator = CreateHeaderStreamWithPendingResponsesCounting<&CNode::MonitoredPendingResponses::gethdrsen>(pfrom);
+    }
+    connman.PushMessage(pfrom, std::move(msg));
 }
 
 /**
@@ -3116,7 +3275,7 @@ static void ProcessTxMessage(const Config& config,
                              const CNodePtr& pfrom,
                              const CNetMsgMaker& msgMaker,
                              const std::string& strCommand,
-                             CDataStream& vRecv,
+                             msg_buffer& vRecv,
                              CConnman& connman)
 {
     // Stop processing the transaction early if we are in blocks only mode and
@@ -3176,9 +3335,12 @@ static void ProcessTxMessage(const Config& config,
 /**
 * Process headers message.
 */
-static bool ProcessHeadersMessage(const Config& config, const CNodePtr& pfrom,
-    const CNetMsgMaker& msgMaker, const CChainParams& chainparams, CDataStream& vRecv,
-    CConnman& connman)
+static bool ProcessHeadersMessage(const Config& config,
+                                  const CNodePtr& pfrom,
+                                  const CNetMsgMaker& msgMaker,
+                                  const CChainParams& chainparams,
+                                  msg_buffer& vRecv,
+                                  CConnman& connman)
 {
     std::vector<CBlockHeader> headers;
 
@@ -3379,12 +3541,15 @@ static bool ProcessHeadersMessage(const Config& config, const CNodePtr& pfrom,
 
     return true;
 }
- 
+
 /**
 * Process block txn message.
 */
-static void ProcessBlockTxnMessage(const Config& config, const CNodePtr& pfrom,
-    const CNetMsgMaker& msgMaker, CDataStream& vRecv, CConnman& connman)
+static void ProcessBlockTxnMessage(const Config& config,
+                                   const CNodePtr& pfrom,
+                                   const CNetMsgMaker& msgMaker,
+                                   msg_buffer& vRecv,
+                                   CConnman& connman)
 {
     BlockTransactions resp;
     vRecv >> resp;
@@ -3497,9 +3662,15 @@ static void ProcessBlockTxnMessage(const Config& config, const CNodePtr& pfrom,
 /**
 * Process compact block message.
 */
-static bool ProcessCompactBlockMessage(const Config& config, const CNodePtr& pfrom,
-    const CNetMsgMaker& msgMaker, const std::string& strCommand, const CChainParams& chainparams,
-    const std::atomic<bool>& interruptMsgProc, int64_t nTimeReceived, CDataStream& vRecv,
+static bool ProcessCompactBlockMessage(
+    const Config& config,
+    const CNodePtr& pfrom,
+    const CNetMsgMaker& msgMaker,
+    const std::string& strCommand,
+    const CChainParams& chainparams,
+    const std::atomic<bool>& interruptMsgProc,
+    int64_t nTimeReceived,
+    msg_buffer& vRecv,
     CConnman& connman)
 {
     CBlockHeaderAndShortTxIDs cmpctblock;
@@ -3558,12 +3729,12 @@ static bool ProcessCompactBlockMessage(const Config& config, const CNodePtr& pfr
     // dummy (empty) BLOCKTXN message, to re-use the logic there in
     // completing processing of the putative block (without cs_main).
     bool fProcessBLOCKTXN = false;
-    CDataStream blockTxnMsg(SER_NETWORK, PROTOCOL_VERSION);
+    msg_buffer blockTxnMsg(SER_NETWORK, PROTOCOL_VERSION);
 
     // If we end up treating this as a plain headers message, call that as
     // well without cs_main.
     bool fRevertToHeaderProcessing = false;
-    CDataStream vHeadersMsg(SER_NETWORK, PROTOCOL_VERSION);
+    msg_buffer vHeadersMsg(SER_NETWORK, PROTOCOL_VERSION);
 
     // Keep a CBlock for "optimistic" compactblock reconstructions (see below)
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
@@ -3773,12 +3944,14 @@ static bool ProcessCompactBlockMessage(const Config& config, const CNodePtr& pfr
 /**
 * Process block message.
 */
-static void ProcessBlockMessage(const Config& config, const CNodePtr& pfrom, CDataStream& vRecv,
-    CConnman& connman)
+static void ProcessBlockMessage(const Config& config,
+                                const CNodePtr& pfrom,
+                                msg_buffer& vRecv,
+                                CConnman& connman)
 {
     std::shared_ptr<CBlock> pblock = std::make_shared<CBlock>();
     vRecv >> *pblock;
-
+    
     LogPrint(BCLog::NETMSG, "received block %s peer=%d\n", pblock->GetHash().ToString(), pfrom->id);
 
     // Process all blocks from whitelisted peers, even if not requested,
@@ -3835,7 +4008,7 @@ static void ProcessBlockMessage(const Config& config, const CNodePtr& pfrom, CDa
 * Process getaddr message.
 */
 static void ProcessGetAddrMessage(const CNodePtr& pfrom,
-                                  CDataStream& vRecv,
+                                  msg_buffer& vRecv,
                                   CConnman& connman)
 {
     // This asymmetric behavior for inbound and outbound connections was
@@ -3873,7 +4046,7 @@ static void ProcessGetAddrMessage(const CNodePtr& pfrom,
 */
 static void ProcessMempoolMessage(const Config& config,
                                   const CNodePtr& pfrom,
-                                  CDataStream& vRecv,
+                                  msg_buffer& vRecv,
                                   CConnman& connman)
 {
     if (config.GetRejectMempoolRequest() && !pfrom->fWhitelisted) {
@@ -3904,8 +4077,10 @@ static void ProcessMempoolMessage(const Config& config,
 /**
 * Process ping message.
 */
-static void ProcessPingMessage(const CNodePtr& pfrom, const CNetMsgMaker& msgMaker,
-    CDataStream& vRecv, CConnman& connman)
+static void ProcessPingMessage(const CNodePtr& pfrom,
+                               const CNetMsgMaker& msgMaker,
+                               msg_buffer& vRecv,
+                               CConnman& connman)
 {
     if(pfrom->nVersion > BIP0031_VERSION) {
         uint64_t nonce = 0;
@@ -3931,11 +4106,13 @@ static void ProcessPingMessage(const CNodePtr& pfrom, const CNetMsgMaker& msgMak
 /**
 * Process pong message.
 */
-static void ProcessPongMessage(const CNodePtr& pfrom, int64_t nTimeReceived, CDataStream& vRecv)
+static void ProcessPongMessage(const CNodePtr& pfrom,
+                               int64_t nTimeReceived,
+                               msg_buffer& vRecv)
 {
     int64_t pingUsecEnd = nTimeReceived;
     uint64_t nonce = 0;
-    size_t nAvail = vRecv.in_avail();
+    size_t nAvail = vRecv.size();
     bool bPingFinished = false;
     std::string sProblem;
 
@@ -4005,7 +4182,7 @@ static void ProcessPongMessage(const CNodePtr& pfrom, int64_t nTimeReceived, CDa
 /**
 * Process filter load message.
 */
-static void ProcessFilterLoadMessage(const CNodePtr& pfrom, CDataStream& vRecv)
+static void ProcessFilterLoadMessage(const CNodePtr& pfrom, msg_buffer& vRecv)
 {
     CBloomFilter filter;
     vRecv >> filter;
@@ -4024,7 +4201,7 @@ static void ProcessFilterLoadMessage(const CNodePtr& pfrom, CDataStream& vRecv)
 /**
 * Process filter add message.
 */
-static void ProcessFilterAddMessage(const CNodePtr& pfrom, CDataStream& vRecv)
+static void ProcessFilterAddMessage(const CNodePtr& pfrom, msg_buffer& vRecv)
 {
     std::vector<uint8_t> vData;
     vRecv >> vData;
@@ -4044,7 +4221,7 @@ static void ProcessFilterAddMessage(const CNodePtr& pfrom, CDataStream& vRecv)
 /**
 * Process filter clear message.
 */
-static void ProcessFilterClearMessage(const CNodePtr& pfrom, CDataStream& vRecv)
+static void ProcessFilterClearMessage(const CNodePtr& pfrom, msg_buffer& vRecv)
 {
     LOCK(pfrom->cs_filter);
     if(pfrom->GetLocalServices() & NODE_BLOOM) {
@@ -4056,7 +4233,7 @@ static void ProcessFilterClearMessage(const CNodePtr& pfrom, CDataStream& vRecv)
 /**
 * Process fee filter message.
 */
-static void ProcessFeeFilterMessage(const CNodePtr& pfrom, CDataStream& vRecv)
+static void ProcessFeeFilterMessage(const CNodePtr& pfrom, msg_buffer& vRecv)
 {
     Amount newFeeFilter(0);
     vRecv >> newFeeFilter;
@@ -4074,8 +4251,11 @@ static void ProcessFeeFilterMessage(const CNodePtr& pfrom, CDataStream& vRecv)
 /**
 * Process protoconf message.
 */
-static bool ProcessProtoconfMessage(const CNodePtr& pfrom, CDataStream& vRecv, CConnman& connman,
-                                    const std::string& strCommand, const Config &config)
+static bool ProcessProtoconfMessage(const CNodePtr& pfrom,
+                                    msg_buffer& vRecv,
+                                    CConnman& connman,
+                                    const std::string& strCommand,
+                                    const Config& config)
 {
     if (pfrom->protoconfReceived) {
         pfrom->fDisconnect = true;
@@ -4209,7 +4389,7 @@ static bool ValidateForkHeight(const DSDetected& msg, const int64_t max_fork_dis
 * Proces revokemid message.
 */
 static void ProcessRevokeMidMessage(const CNodePtr& pfrom,
-                                    CDataStream& vRecv,
+                                    msg_buffer& vRecv,
                                     CConnman& connman,
                                     const CNetMsgMaker& msgMaker)
 {
@@ -4260,7 +4440,7 @@ static void ProcessRevokeMidMessage(const CNodePtr& pfrom,
 */
 static void ProcessDoubleSpendMessage(const Config& config,
                                       const std::shared_ptr<CNode>& pfrom,
-                                      CDataStream& vRecv,
+                                      msg_buffer& vRecv,
                                       CConnman& connman,
                                       const CNetMsgMaker& msgMaker)
 {
@@ -4374,10 +4554,13 @@ static void ProcessDoubleSpendMessage(const Config& config,
 /**
 * Process next message.
 */
-static bool ProcessMessage(const Config& config, const CNodePtr& pfrom,
-                           const std::string& strCommand, CDataStream& vRecv,
+static bool ProcessMessage(const Config& config,
+                           const CNodePtr& pfrom,
+                           const std::string& strCommand,
+                           msg_buffer& vRecv,
                            int64_t nTimeReceived,
-                           const CChainParams& chainparams, CConnman& connman,
+                           const CChainParams& chainparams,
+                           CConnman& connman,
                            const std::atomic<bool>& interruptMsgProc)
 {
     LogPrint(BCLog::NETMSGVERB, "received: %s (%u bytes) peer=%d\n",
@@ -4737,7 +4920,7 @@ bool ProcessMessages(const Config &config, const CNodePtr& pfrom, CConnman &conn
         if (interruptMsgProc) {
             return false;
         }
-        if (!pfrom->vRecvGetData.empty()) {
+        if(!pfrom->vRecvGetData.empty()) {
             fMoreWork = true;
         }
     }
@@ -4760,6 +4943,10 @@ bool ProcessMessages(const Config &config, const CNodePtr& pfrom, CConnman &conn
             Misbehaving(pfrom, 1, "Over-long size message protection");
         } else if (strstr(e.what(), "non-canonical ReadCompactSize()")) {
             // Allow exceptions from non-canonical encoding
+            LogPrint(BCLog::NETMSG, "%s(%s, %lu bytes): Exception '%s' caught\n", __func__,
+                     SanitizeString(strCommand), nPayloadLength, e.what());
+        } else if (strstr(e.what(), "parsing error")) {
+            // Allow generic parsing errors
             LogPrint(BCLog::NETMSG, "%s(%s, %lu bytes): Exception '%s' caught\n", __func__,
                      SanitizeString(strCommand), nPayloadLength, e.what());
         } else {

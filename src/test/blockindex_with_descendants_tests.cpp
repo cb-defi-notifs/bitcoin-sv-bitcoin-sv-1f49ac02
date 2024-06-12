@@ -2,6 +2,7 @@
 // Distributed under the Open BSV software license, see the accompanying file LICENSE.
 
 #include "blockindex_with_descendants.h"
+#include "test/test_bitcoin.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -165,8 +166,9 @@ BOOST_AUTO_TEST_CASE(basic) {
     // Sanity check that we created all blocks we intended
     BOOST_REQUIRE_EQUAL( b.mapBlockIndex.size(), N );
 
+    ResetGlobalRandomContext();
     // Perform all checks for various order of block index objects
-    std::mt19937 random(1); // always use the same seed for consistent results
+    std::mt19937 random(insecure_rand()); // always use the same seed for consistent results
     for(int i=0; i<1000; ++i)
     {
         // Create BlockIndexWithDescendants object for specified block, iterate over all descendant blocks,
@@ -185,12 +187,12 @@ BOOST_AUTO_TEST_CASE(basic) {
             for(auto* item=blocks.Root(); item!=nullptr; item=item->Next())
             {
                 // Each block must only be visited once
-                BOOST_REQUIRE_EQUAL(result.count(item->BlockIndex()->GetVersion()), 0);
+                BOOST_REQUIRE_EQUAL(result.count(item->BlockIndex()->GetVersion()), 0U);
 
                 if(item->BlockIndex() != root_block)
                 {
                     // Parent of each block (except the root) must have been visited before
-                    BOOST_REQUIRE_EQUAL(result.count(item->BlockIndex()->GetPrev()->GetVersion()), 1);
+                    BOOST_REQUIRE_EQUAL(result.count(item->BlockIndex()->GetPrev()->GetVersion()), 1U);
                 }
 
                 result.insert(item->BlockIndex()->GetVersion());
@@ -239,7 +241,7 @@ BOOST_AUTO_TEST_CASE(large) {
     }
 
     // Sanity check that we created all blocks we intended
-    BOOST_REQUIRE_EQUAL( b.mapBlockIndex.size(), N );
+    BOOST_REQUIRE_EQUAL( b.mapBlockIndex.size(), static_cast<uint32_t>(N) );
 
     using clock = std::chrono::steady_clock;
 

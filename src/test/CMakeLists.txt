@@ -8,7 +8,7 @@ project(bitcoin-test)
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/data")
 
 # Python is required to build C++ tests (and to execute functional tests)
-find_package(Python3 REQUIRED)
+find_package(PythonInterp 3 REQUIRED)
 
 
 function(gen_json_header NAME)
@@ -57,6 +57,7 @@ add_test_to_suite(bitcoin test_bitcoin
 	addrman_tests.cpp
 	amount_tests.cpp
 	allocator_tests.cpp
+    array_parser_tests.cpp
 	base32_tests.cpp
 	base58_tests.cpp
 	base64_tests.cpp
@@ -67,6 +68,8 @@ add_test_to_suite(bitcoin test_bitcoin
 	blockencodings_tests.cpp
 	block_index_mutex_distribution_tests.cpp
 	block_info_tests.cpp
+    block_parser_tests.cpp
+    blocktxn_parser_tests.cpp
 	blockindex_with_descendants_tests.cpp
 	blockmaxsize_tests.cpp
 	blockfile_reading_tests.cpp
@@ -78,6 +81,8 @@ add_test_to_suite(bitcoin test_bitcoin
 	checkpoints_tests.cpp
 	checkqueue_tests.cpp
 	check_selfish_mining_tests.cpp
+    cmpct_size_tests.cpp
+    cmpctblock_parser_tests.cpp
 	coinbase_doc_tests.cpp
 	coins_tests.cpp
 	write_preferring_upgradable_mutex_tests.cpp
@@ -99,6 +104,8 @@ add_test_to_suite(bitcoin test_bitcoin
 	enum_cast_tests.cpp
 	excessiveblock_tests.cpp
 	eviction_candidates_tracker_tests.cpp
+    fixed_len_multi_parser_tests.cpp
+    fixed_len_parser_tests.cpp
 	frozentxo_db_tests.cpp
 	frozentxo_mempool_tests.cpp
 	frozentxo_tests.cpp
@@ -136,15 +143,21 @@ add_test_to_suite(bitcoin test_bitcoin
 	miner_info_doc_tests.cpp
 	miner_info_error_tests.cpp
 	miner_info_ref_tests.cpp
+    mod_n_byte_parser.h
+    msg_buffer_tests.cpp
+    msg_parser_buffer_tests.cpp
 	multisig_tests.cpp
     net_message_maker_tests.cpp
     net_association_tests.cpp
 	net_tests.cpp
+    net_message_tests.cpp
 	netbase_tests.cpp
 	object_stream_deserialization_tests.cpp
 	opcode_tests.cpp
 	pmt_tests.cpp
 	pow_tests.cpp
+    prefilled_tx_parser_tests.cpp
+    prefilled_txs_parser_tests.cpp
 	prevector_tests.cpp
 	protocol_tests.cpp
 	raii_event_tests.cpp
@@ -163,6 +176,7 @@ add_test_to_suite(bitcoin test_bitcoin
 	sighashtype_tests.cpp
 	sigopcount_tests.cpp
 	sigutil.cpp
+    single_seg_parser_tests.cpp
 	skiplist_tests.cpp
 	streams_tests.cpp
 	stream_serialization_tests.cpp
@@ -185,9 +199,12 @@ add_test_to_suite(bitcoin test_bitcoin
 	ttor_tests.cpp
 	transaction_tests.cpp
     txn_grouper_tests.cpp
+    tx_parser_tests.cpp
+    txs_parser_tests.cpp
 	txvalidationcache_tests.cpp
 	uint256_tests.cpp
 	undo_tests.cpp
+    unique_array_tests.cpp
 	univalue_tests.cpp
 	util_tests.cpp
     validation_scheduler_tests.cpp
@@ -206,13 +223,16 @@ target_include_directories(test_bitcoin
 		${OPENSSL_INCLUDE_DIR}
 )
 
-find_package(Boost 1.58 REQUIRED unit_test_framework)
+target_compile_options(test_bitcoin PRIVATE -Wno-return-std-move)
+
+find_package(Boost 1.74 REQUIRED unit_test_framework)
 
 target_link_libraries(
 	test_bitcoin
 	Boost::unit_test_framework
 	rpcclient
 	server
+	$<$<PLATFORM_ID:Windows>:Mswsock> # use Mswsock.dll for aio on Windows
 	$<$<PLATFORM_ID:Linux>:rt>) # use librt.so for aio on Linux
 
 # We need to detect if the BOOST_TEST_DYN_LINK flag is required.

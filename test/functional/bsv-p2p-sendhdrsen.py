@@ -11,10 +11,9 @@ from test_framework.script import CScript, OP_FALSE, OP_RETURN, OP_TRUE
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import assert_equal, assert_greater_than, p2p_port, wait_until, sync_blocks
 
-from bip32utils import BIP32Key
-import ecdsa
 import time
 import os
+
 
 class SPVNode(NodeConnCB):
     def __init__(self):
@@ -22,7 +21,7 @@ class SPVNode(NodeConnCB):
         self.hdrsen = [] # array of received hdrsen messages
 
     def sendhdrsen(self):
-        self.send_and_ping( msg_sendhdrsen() )
+        self.send_and_ping(msg_sendhdrsen())
 
     def gethdrsen(self, locator, hashstop):
         msg = msg_gethdrsen()
@@ -49,13 +48,11 @@ class SPVNode(NodeConnCB):
         return our_peer_info[0]
 
 
-
 class SendHdrsEnTest(BitcoinTestFramework):
     def set_test_params(self):
         self.num_nodes = 2
         self.setup_clean_chain = True
         self.extra_args = [['-genesisactivationheight=1']]*2 # Genesis must be activated so that we can send large transactions
-        self.curve = ecdsa.SECP256k1
 
         # Setup miner ID keys and a single revocation key
         self.minerIdKey = MinerIdKeys("01")
@@ -112,7 +109,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
         funding_tx = create_coinbase(node.getblockcount())
         funding_tx.vout[0].nValue = 1*COIN
         for i in range(1,50):
-            funding_tx.vout.append( CTxOut(1*COIN, CScript([OP_TRUE])) )
+            funding_tx.vout.append(CTxOut(1*COIN, CScript([OP_TRUE])))
         funding_tx.rehash()
         self.submit_block(node, funding_tx)
         node.generate(100)
@@ -127,7 +124,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
 
         # Node that will receive enriched header announcements from node
         spv_node = SPVNode()
-        spv_node.add_connection( NodeConn('127.0.0.1', p2p_port(0), node, spv_node) )
+        spv_node.add_connection(NodeConn('127.0.0.1', p2p_port(0), node, spv_node))
         NetworkThread().start()
         spv_node.wait_for_verack()
         spv_node.sync_with_ping()
@@ -178,7 +175,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
         #           0 bytes for element data in field coinbase_merkle_proof.nodes
         #           1 byte for indication of following miner-info txn details
         HdrsEnSize = 152
-        coinbase_tx.vout.append( CTxOut(0, CScript([OP_FALSE, OP_RETURN] + [b"a" * (MAX_PROTOCOL_RECV_PAYLOAD_LENGTH-83-HdrsEnSize)])) )
+        coinbase_tx.vout.append(CTxOut(0, CScript([OP_FALSE, OP_RETURN] + [b"a" * (MAX_PROTOCOL_RECV_PAYLOAD_LENGTH-83-HdrsEnSize)])))
         coinbase_tx.rehash()
         assert_equal(len(coinbase_tx.serialize()), MAX_PROTOCOL_RECV_PAYLOAD_LENGTH-HdrsEnSize) # check that we have created transaction of correct size
         block3 = self.submit_block(node, coinbase_tx)
@@ -189,7 +186,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
 
         # Create and submit block with coinbase transaction whose size is such that resulting hdrsen is one byte over the limit
         coinbase_tx = create_coinbase(node.getblockcount())
-        coinbase_tx.vout.append( CTxOut(0, CScript([OP_FALSE, OP_RETURN] + [b"a" * (MAX_PROTOCOL_RECV_PAYLOAD_LENGTH-83-(HdrsEnSize-1))] )) )
+        coinbase_tx.vout.append(CTxOut(0, CScript([OP_FALSE, OP_RETURN] + [b"a" * (MAX_PROTOCOL_RECV_PAYLOAD_LENGTH-83-(HdrsEnSize-1))])))
         coinbase_tx.rehash()
         block4 = self.submit_block(node, coinbase_tx)
 
@@ -212,14 +209,14 @@ class SendHdrsEnTest(BitcoinTestFramework):
         # Create and mine a block with several transactions so that Merkle proof in hdrsen message is not empty
         txs = []
         for i in range(49):
-            txs.append( create_transaction(funding_tx, i, CScript(), 1*COIN) )
+            txs.append(create_transaction(funding_tx, i, CScript(), 1*COIN))
         # Also make this block a miner ID enabled one containing a miner-info txn
         minerIdParams = {
             'height': self.nodes[0].getblockcount() + 1,
             'minerKeys': self.minerIdKey,
             'revocationKeys': self.minerIdRevocationKey
         }
-        block5 = make_miner_id_block(node, minerIdParams, utxo={ "txid" : funding_tx.hash, "vout" : 49, "amount" : 1.0 }, txns=txs)
+        block5 = make_miner_id_block(node, minerIdParams, utxo={"txid" : funding_tx.hash, "vout" : 49, "amount" : 1.0}, txns=txs)
         coinbase_tx = block5.vtx[0]
         miner_info_tx = block5.vtx[1 + len(txs)]
         node.submitblock(ToHex(block5))
@@ -253,7 +250,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
         assert_equal(node1.getblockcount(), start_height)
         block_hashes = []
         for i in range(8):
-            block_hashes.append( node1.generate(1)[0] )
+            block_hashes.append(node1.generate(1)[0])
 
         # Check that we receive 8 headers in 1 hdrsen message
         h = spv_node.wait_for_hdrsen()
@@ -276,7 +273,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
         assert_equal(node1.getblockcount(), start_height)
         block_hashes = []
         for i in range(9):
-            block_hashes.append( node1.generate(1)[0] )
+            block_hashes.append(node1.generate(1)[0])
 
         # Should receive an inv instead of hdrsen, because hdrsen message would contain more than 8 headers
         spv_node.wait_for_inv([CInv(CInv.BLOCK, int(block_hashes[8],16))], 5)
@@ -312,7 +309,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
         assert(h0.coinbaseTxProof is not None)
 
         # Message sendheaders should override sendhdrsen
-        spv_node.send_and_ping( msg_sendheaders() )
+        spv_node.send_and_ping(msg_sendheaders())
         block10 = self.generate_block(node)
         spv_node.wait_for_headers(5)
         h = spv_node.last_message.get("headers") # should receive 'headers' message
@@ -327,8 +324,7 @@ class SendHdrsEnTest(BitcoinTestFramework):
             spv_node.sendhdrsen()
             time.sleep(1)
         peerInfoPostSendHeaderMsg = spv_node.get_peer_info(node)
-        assert_greater_than( peerInfoPostSendHeaderMsg['banscore'], peerInfoPreSendHeaderMsg['banscore'] )
-
+        assert_greater_than(peerInfoPostSendHeaderMsg['banscore'], peerInfoPreSendHeaderMsg['banscore'])
 
 
 if __name__ == '__main__':

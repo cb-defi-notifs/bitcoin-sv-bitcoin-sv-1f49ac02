@@ -8,15 +8,13 @@ from test_framework.util import create_confirmed_utxos, wait_until
 from test_framework.miner_id import MinerIdKeys, make_miner_id_block
 from decimal import Decimal
 
-from bip32utils import BIP32Key
-
-import ecdsa
 import os
 import time
 
 '''
 Test P2P handling of the MinerID revokemid message.
 '''
+
 
 class TestNode(NodeConnCB):
     def __init__(self):
@@ -27,13 +25,13 @@ class TestNode(NodeConnCB):
         super().on_revokemid(conn, message)
         self.revokemid_count += 1
 
+
 class RevokeMid(BitcoinTestFramework):
 
     def set_test_params(self):
         self.num_nodes = 3
         self.setup_clean_chain = True
         self.extra_args = [['-whitelist=127.0.0.1']] * self.num_nodes
-        self.curve = ecdsa.SECP256k1
 
         # Setup miner ID keys
         self.minerIdKeys = []
@@ -74,7 +72,7 @@ class RevokeMid(BitcoinTestFramework):
             block = make_miner_id_block(p2p_0, minerIdParams, utxo=utxos.pop())
             p2p_0.send_message(msg_block(block))
             wait_until(lambda: self.nodes[0].getbestblockhash() == block.hash)
-            
+
             minerIdParams = {
                 'height': self.nodes[0].getblockcount() + 1,
                 'minerKeys': self.minerIdKeys[2],
@@ -152,6 +150,6 @@ class RevokeMid(BitcoinTestFramework):
             assert(minerids1['miners'][0]['minerids'][0]['state'] == 'CURRENT')
             assert(minerids2['miners'][0]['minerids'][0]['state'] == 'CURRENT')
 
+
 if __name__ == '__main__':
     RevokeMid().main()
-

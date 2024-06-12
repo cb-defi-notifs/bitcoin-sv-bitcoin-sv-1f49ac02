@@ -1,7 +1,7 @@
 # Copyright (c) 2018-2019 Bitcoin Association
 # Distributed under the Open BSV software license, see the accompanying file LICENSE.
 
-find_package(Python3 REQUIRED)
+find_package(PythonInterp 3 REQUIRED)
 
 add_custom_command(
   OUTPUT data/block413567.raw.h
@@ -37,6 +37,5 @@ target_link_libraries(bench_bitcoin
         bitcoinconsensus
         crypto
         leveldb
-        secp256k1
         univalue
         $<$<PLATFORM_ID:Linux>:rt>) # use librt.so for aio on Linux

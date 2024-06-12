@@ -1,10 +1,10 @@
 dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
 define(_CLIENT_VERSION_MAJOR, 1)
-define(_CLIENT_VERSION_MINOR, 0)
-define(_CLIENT_VERSION_REVISION, 14)
+define(_CLIENT_VERSION_MINOR, 1)
+define(_CLIENT_VERSION_REVISION, 0)
 define(_CLIENT_VERSION_BUILD, 0)
-define(_COPYRIGHT_YEAR, 2023)
+define(_COPYRIGHT_YEAR, 2024)
 define(_COPYRIGHT_HOLDERS,[The %s Association])
 define(_COPYRIGHT_HOLDERS_SUBSTITUTION,[[Bitcoin]])
 AC_INIT([Bitcoin SV],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_REVISION],[https://github.com/bitcoin-sv/bitcoin-sv/issues],[bitcoin-sv],[https://bitcoinsv.io/])
@@ -52,8 +52,8 @@ case $host in
      lt_cv_deplibs_check_method="pass_all"
   ;;
 esac
-dnl Require C++17 compiler (no GNU extensions)
-AX_CXX_COMPILE_STDCXX([17], [noext], [mandatory], [nodefault])
+dnl Require C++20 compiler (no GNU extensions)
+AX_CXX_COMPILE_STDCXX([20], [noext], [mandatory], [nodefault])
 dnl Check if -latomic is required for <std::atomic>
 CHECK_ATOMIC
 
@@ -253,6 +253,9 @@ AC_ARG_ENABLE([werror],
 
 AC_LANG_PUSH([C++])
 AX_CHECK_COMPILE_FLAG([-Werror],[CXXFLAG_WERROR="-Werror"],[CXXFLAG_WERROR=""])
+
+# Placeholder for linking with tbb as and when it becomes required
+#AC_CHECK_LIB([tbb], [main],TBB_LIBS=-ltbb, AC_MSG_NOTICE(libtbb not available.))
 
 if test "x$enable_asan" = xyes; then
 	enable_debug=yes
@@ -649,11 +652,15 @@ if test x$use_hardening != xno; then
     HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -D_FORTIFY_SOURCE=2"
   ])
 
+  AX_CHECK_COMPILE_FLAG([-fwrapv],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fwrapv"])
+
   AX_CHECK_LINK_FLAG([[-Wl,--dynamicbase]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,--dynamicbase"])
   AX_CHECK_LINK_FLAG([[-Wl,--nxcompat]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,--nxcompat"])
   AX_CHECK_LINK_FLAG([[-Wl,--high-entropy-va]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,--high-entropy-va"])
   AX_CHECK_LINK_FLAG([[-Wl,-z,relro]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,relro"])
   AX_CHECK_LINK_FLAG([[-Wl,-z,now]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,now"])
+  AX_CHECK_LINK_FLAG([[-Wl,-z,noexecstack]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,noexecstack"])
+  AX_CHECK_LINK_FLAG([[-Wl,-z,nodlopen]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,nodlopen"])
 
   if test x$TARGET_OS != xwindows; then
     AX_CHECK_COMPILE_FLAG([-fPIE],[PIE_FLAGS="-fPIE"])
@@ -861,7 +868,7 @@ fi
 if test x$use_boost = xyes; then
 
 dnl Minimum required Boost version
-define(MINIMUM_REQUIRED_BOOST, 1.59.0)
+define(MINIMUM_REQUIRED_BOOST, 1.74.0)
 
 dnl Check for boost libs
 AX_BOOST_BASE([MINIMUM_REQUIRED_BOOST])
@@ -1302,6 +1309,7 @@ AC_SUBST(ZMQ_LIBS)
 AC_SUBST(PROTOBUF_LIBS)
 AC_SUBST(QR_LIBS)
 AC_SUBST(AIO_LIBS)
+AC_SUBST(TBB_LIBS)
 AC_SUBST(HAVE_BUILTIN_PREFETCH)
 AC_SUBST(HAVE_MM_PREFETCH)
 AC_SUBST(HAVE_STRONG_GETAUXVAL)
@@ -1342,6 +1350,7 @@ if test x$need_bundled_univalue = xyes; then
 fi
 
 ac_configure_args="${ac_configure_args} --disable-shared --with-pic --with-bignum=no --enable-module-recovery --enable-module-multiset --disable-jni"
+ac_configure_args="${ac_configure_args} --disable-module-schnorrsig --disable-module-extrakeys --disable-module-ellswift"
 AC_CONFIG_SUBDIRS([src/secp256k1])
 
 AC_OUTPUT
@@ -1367,33 +1376,35 @@ esac
 
 echo
 echo "Options used to compile and link:"
-echo "  prod build    = $enable_prod_build"
-echo "  with wallet   = $enable_wallet"
-echo "  with zmq      = $use_zmq"
-echo "  with test     = $use_tests"
-echo "  with bench    = $use_bench"
-echo "  with upnp     = $use_upnp"
-echo "  use asm       = $use_asm"
-echo "  debug enabled = $enable_debug"
-echo "  werror        = $enable_werror"
+echo "  prod build        = $enable_prod_build"
+echo "  with wallet       = $enable_wallet"
+echo "  with zmq          = $use_zmq"
+echo "  with test         = $use_tests"
+echo "  with bench        = $use_bench"
+echo "  with upnp         = $use_upnp"
+echo "  use asm           = $use_asm"
+echo "  debug enabled     = $enable_debug"
+echo "  werror            = $enable_werror"
 echo
-echo "  sanitizers    "
-echo "          asan  = $enable_asan"
-echo "          tsan  = $enable_tsan"
-echo "          ubsan = $enable_ubsan"
+echo "  sanitizers"
+echo "          asan      = $enable_asan"
+echo "          tsan      = $enable_tsan"
+echo "          ubsan     = $enable_ubsan"
 echo
 echo "  memory allocators"
-echo "       tcmalloc = $use_tcmalloc"
-echo "       jemalloc = $use_jemalloc"
+echo "       tcmalloc     = $use_tcmalloc"
+echo "       jemalloc     = $use_jemalloc"
 echo
-echo "  target os     = $TARGET_OS"
-echo "  build os      = $BUILD_OS"
+echo "  target os         = $TARGET_OS"
+echo "  build os          = $BUILD_OS"
 echo
-echo "  CC            = $CC"
-echo "  CFLAGS        = $CFLAGS"
-echo "  CPPFLAGS      = $CPPFLAGS"
-echo "  CXX           = $CXX"
-echo "  CXXFLAGS      = $CXXFLAGS"
-echo "  LDFLAGS       = $LDFLAGS"
+echo "  CC                = $CC"
+echo "  CFLAGS            = $CFLAGS"
+echo "  CPPFLAGS          = $CPPFLAGS"
+echo "  CXX               = $CXX"
+echo "  HARDENED_CXXFLAGS = $HARDENED_CXXFLAGS"
+echo "  HARDENED_LDFLAGS  = $HARDENED_LDFLAGS"
+echo "  CXXFLAGS          = $CXXFLAGS"
+echo "  LDFLAGS           = $LDFLAGS"
 
 echo

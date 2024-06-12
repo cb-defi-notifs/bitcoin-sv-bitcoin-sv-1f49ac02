@@ -851,7 +851,7 @@ BOOST_AUTO_TEST_CASE(db_thread_safety_tests)
 
     // Helper that continuously checks all TXOs in array and returns when should_quit is true.
     auto frozen_txo_checker = [&](std::int32_t height){
-        for(std::size_t i = 0; ; ++i) // NOTE: This loop typically finishes after only two iterations because writing thread takes most of the time.
+        for(;;) // NOTE: This loop typically finishes after only two iterations because writing thread takes most of the time.
         {
             // Check quit signal so that we can do one more loop before quitting
             bool should_quit_after_loop = should_quit;
@@ -924,7 +924,7 @@ BOOST_AUTO_TEST_CASE(db_thread_safety_tests)
     stop_frozen_txo_checker();
     db.Sync();
     BOOST_CHECK_EQUAL( policy.num_frozen, txo_array.size() );
-    BOOST_CHECK_EQUAL( consensus.num_frozen, 0 );
+    BOOST_CHECK_EQUAL( consensus.num_frozen, 0U );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[0].alt, txo_array.size() );
     BOOST_CHECK_EQUAL( cnt[1].ok + cnt[1].alt, txo_array.size() );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[1].ok, txo_array.size() );
@@ -974,7 +974,7 @@ BOOST_AUTO_TEST_CASE(db_thread_safety_tests)
     stop_frozen_txo_checker();
     db.Sync();
     BOOST_CHECK_EQUAL( policy.num_frozen, txo_array.size() );
-    BOOST_CHECK_EQUAL( consensus.num_frozen, 0 );
+    BOOST_CHECK_EQUAL( consensus.num_frozen, 0U );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[0].alt, txo_array.size() );
     BOOST_CHECK_EQUAL( cnt[1].ok + cnt[1].alt, txo_array.size() );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[1].ok, txo_array.size() );
@@ -990,10 +990,10 @@ BOOST_AUTO_TEST_CASE(db_thread_safety_tests)
     stop_frozen_txo_checker();
     db.Sync();
     BOOST_CHECK_EQUAL( policy.num_frozen, txo_array.size() );
-    BOOST_CHECK_EQUAL( consensus.num_frozen, 0 );
+    BOOST_CHECK_EQUAL( consensus.num_frozen, 0U );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[1].ok, txo_array.size() );
-    BOOST_CHECK_EQUAL( cnt[0].alt, 0 );
-    BOOST_CHECK_EQUAL( cnt[1].alt, 0 );
+    BOOST_CHECK_EQUAL( cnt[0].alt, 0U );
+    BOOST_CHECK_EQUAL( cnt[1].alt, 0U );
 
     // Remove all frozen TXO records while checking if they are frozen
     start_frozen_txo_checker(20);
@@ -1004,11 +1004,11 @@ BOOST_AUTO_TEST_CASE(db_thread_safety_tests)
     });
     stop_frozen_txo_checker();
     db.Sync();
-    BOOST_CHECK_EQUAL( policy.num_frozen, 0 );
-    BOOST_CHECK_EQUAL( consensus.num_frozen, 0 );
+    BOOST_CHECK_EQUAL( policy.num_frozen, 0U );
+    BOOST_CHECK_EQUAL( consensus.num_frozen, 0U );
     BOOST_CHECK_EQUAL( cnt[0].ok + cnt[1].ok, txo_array.size());
-    BOOST_CHECK_EQUAL( cnt[0].alt, 0);
-    BOOST_CHECK_EQUAL( cnt[1].alt, 0);
+    BOOST_CHECK_EQUAL( cnt[0].alt, 0U);
+    BOOST_CHECK_EQUAL( cnt[1].alt, 0U);
 }
 
 

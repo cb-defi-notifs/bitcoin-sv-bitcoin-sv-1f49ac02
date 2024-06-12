@@ -31,7 +31,7 @@ struct CBlockIndex::UnitTestAccess<class Unique>
 
     static uint256 CorruptDiskBlockMetaData( CBlockIndex& blockIndex, DirtyBlockIndexStore& notifyDirty )
     {
-        uint256 randomHash = GetRandHash();
+        uint256 randomHash = InsecureRand256();
         blockIndex.SetDiskBlockMetaData( randomHash, 1, notifyDirty );
 
         return randomHash;
@@ -165,13 +165,13 @@ BOOST_AUTO_TEST_CASE(read_without_meta_info)
 
         auto streamCorruptMetaData =
             index->StreamBlockFromDisk(INIT_PROTO_VERSION, dummyDirty);
-        BOOST_REQUIRE_EQUAL(streamCorruptMetaData.metaData.diskDataSize, 1);
+        BOOST_REQUIRE_EQUAL(streamCorruptMetaData.metaData.diskDataSize, 1U);
         BOOST_REQUIRE_EQUAL(
             streamCorruptMetaData.metaData.diskDataHash.GetCheapHash(),
             randomHash.GetCheapHash());
         BOOST_REQUIRE_EQUAL(
             SerializeAsyncStream(*streamCorruptMetaData.stream, 5u).size(),
-            1);
+            1U);
     }
 }
 

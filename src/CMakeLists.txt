@@ -2,10 +2,10 @@
 # Copyright (c) 2019-2020 Bitcoin Association
 # Distributed under the Open BSV software license, see the accompanying file LICENSE.
 
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.9)
 project(BitcoinSV)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Default visibility is hidden on all targets.
 set(CMAKE_C_VISIBILITY_PRESET hidden)
@@ -14,6 +14,7 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 option(ENABLE_PROD_BUILD "Enable production build" OFF)
 option(BUILD_BITCOIN_WALLET "Activate the wallet functionality" ON)
 option(BUILD_BITCOIN_ZMQ "Activate the ZeroMQ functionalities" ON)
+option(BUILD_BITCOIN_UPNP "Activate the UPnP functionality" OFF)
 
 option(BUILD_BITCOIN_CLI "Build bitcoin-cli" ON)
 option(BUILD_BITCOIN_TX "Build bitcoin-tx" ON)
@@ -58,6 +59,25 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
 			/D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING # deprecated usage of std::iterator class template
 		)
 	endif()
+endif()
+
+# Enable hardening
+option(USE_HARDENING "Enable extra hardening" ON)
+if(CMAKE_CXX_COMPILER_ID MATCHES GNU|Clang)
+    if(USE_HARDENING)
+        add_compile_options(
+            -Wstack-protector
+            -fstack-protector-all
+            -fwrapv
+        )
+        add_link_options(
+            "LINKER:-z,relro"
+            "LINKER:-z,now"
+            "LINKER:-z,noexecstack"
+            "LINKER:-z,nodlopen"
+            "LINKER:-pie"
+        )
+    endif()
 endif()
 
 if(MSVC)
@@ -198,7 +218,7 @@ endfunction(prepend)
 
 prepend(BOOST_LIBRARIES "Boost::" ${BOOST_PACKAGES_REQUIRED})
 
-find_package(Boost 1.59 REQUIRED ${BOOST_PACKAGES_REQUIRED})
+find_package(Boost 1.74 REQUIRED ${BOOST_PACKAGES_REQUIRED})
 target_link_libraries(util univalue crypto ${BOOST_LIBRARIES})
 
 # Make sure boost uses std::atomic (it doesn't before 1.63)
@@ -267,6 +287,26 @@ add_library(common
 	net/association.h
 	net/association_id.h
 	net/authconn.h
+    net/block_parser.cpp
+    net/block_parser.h
+    net/blocktxn_parser.cpp
+    net/blocktxn_parser.h
+    net/cmpct_size.h
+    net/cmpct_size.cpp
+    net/cmpctblock_parser.cpp
+    net/cmpctblock_parser.h
+    net/fixed_len_multi_parser.h
+    net/fixed_len_multi_parser.cpp
+    net/fixed_len_parser.h
+    net/fixed_len_parser.cpp
+    net/msg_buffer.h
+    net/msg_buffer.cpp
+    net/msg_parser.h
+    net/msg_parser_buffer.h
+    net/msg_parser_buffer.cpp
+    net/parser_utils.h
+    net/single_seg_parser.h
+    net/single_seg_parser.cpp
 	net/net.h
 	net/net_message.h
 	net/net_types.h
@@ -275,10 +315,16 @@ add_library(common
 	net/netbase.cpp
 	net/netbase.h
 	net/node_stats.h
+    net/prefilled_tx_parser.h
+    net/prefilled_tx_parser.cpp
+    net/p2p_msg_lengths.h
+    net/array_parser.h
 	net/send_queue_bytes.h
 	net/stream.h
 	net/stream_policy.h
 	net/stream_policy_factory.h
+    net/tx_parser.h
+    net/tx_parser.cpp
 	orphan_txns.h
 	policy/policy.h
 	pow.h
@@ -307,12 +353,12 @@ add_library(common
 	script/standard.cpp
 	script/standard.h
 	script_config.h
-	span.h
 	streams.h
 	support/allocators/secure.h
 	support/allocators/zeroafterfree.h
 	task.h
 	task_helpers.h
+	taskcancellation.cpp
 	taskcancellation.h
 	thread_safe_queue.h
 	threadpool.h
@@ -332,6 +378,8 @@ add_library(common
 	txn_validation_config.h
 	txn_validation_data.h
 	txn_validation_result.h
+    unique_array.h
+    unique_array.cpp
 	validation.h
 	version.h
 	versionbits.h
@@ -341,6 +389,7 @@ add_library(common
 	write_preferring_upgradable_mutex.h
 )
 
+target_include_directories(common PRIVATE secp256k1/include)
 target_link_libraries(common util secp256k1)
 
 # libbitcoinconsensus
@@ -360,12 +409,15 @@ add_library(bitcoinconsensus
 	script/script.cpp
 	script/script_error.cpp
 	script/script_num.cpp
+    taskcancellation.cpp
+    taskcancellation.h
 )
 
 target_link_libraries(bitcoinconsensus common)
 target_include_directories(bitcoinconsensus
 	PRIVATE
 		${OPENSSL_INCLUDE_DIR}
+        secp256k1/include
 )
 
 # Bitcoin server facilities
@@ -603,6 +655,14 @@ if(BUILD_BITCOIN_ZMQ)
 	target_link_libraries(server zmq)
 endif()
 
+# UPnP
+if(BUILD_BITCOIN_UPNP)
+    find_package(MiniUPnP REQUIRED)
+    target_include_directories(server PRIVATE ${UPNP_INCLUDE_DIR})
+    target_link_libraries(server ${UPNP_LIBRARY})
+    add_compile_definitions(USE_UPNP=0)
+endif()
+
 # RPC client support
 add_library(rpcclient
 	cfile_util.cpp
@@ -666,6 +726,12 @@ target_link_libraries(
 	$<$<PLATFORM_ID:Linux>:rt>) # use librt.so for aio on Linux
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
 	target_sources(bitcoind PRIVATE bitcoind-res.rc)
+endif()
+
+include(ClangTidy)
+AddClangTidy(bitcoind)
+if(BUILD_BITCOIN_CLI)
+    AddClangTidy(bitcoin-cli)
 endif()
 
 if (MSVC)

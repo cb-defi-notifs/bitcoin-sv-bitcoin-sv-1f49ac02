@@ -3494,7 +3494,7 @@ private:
         size_t maxThreads { parallelTxnValidation? static_cast<size_t>(config.GetPerBlockTxnValidatorThreadsCount()) : 1UL };
         uint64_t batchSize { config.GetBlockValidationTxBatchSize() };
         size_t numThreads { block.vtx.size() / batchSize };
-        numThreads = std::clamp(numThreads, 1UL, maxThreads);
+        numThreads = std::clamp(numThreads, size_t(1), maxThreads);
 
         int64_t startGroupTime { GetTimeMicros() };
         TxnGrouper grouper {};
@@ -4039,22 +4039,20 @@ class ConnectTrace {
 private:
     std::vector<PerBlockConnectTrace> blocksConnected;
     CTxMemPool &pool;
+    boost::signals2::scoped_connection slotConnection {};
     bool mTracingPoolEntryRemovedEvents = false;
 
     void ConnectToPoolEntryRemovedEvent()
     {
         using namespace boost::placeholders;
         mTracingPoolEntryRemovedEvents = true;
-        pool.NotifyEntryRemoved.connect(
-            boost::bind(&ConnectTrace::NotifyEntryRemoved, this, _1, _2));
+        slotConnection = pool.NotifyEntryRemoved.connect(boost::bind(&ConnectTrace::NotifyEntryRemoved, this, _1, _2));
     }
 
     void DisconnectFromPoolEntryRemovedEvent()
     {
-        using namespace boost::placeholders;
         mTracingPoolEntryRemovedEvents = false;
-        pool.NotifyEntryRemoved.disconnect(
-            boost::bind(&ConnectTrace::NotifyEntryRemoved, this, _1, _2));
+        slotConnection.disconnect();
     }
 
 public:
